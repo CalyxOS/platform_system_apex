@@ -41,60 +41,22 @@ class MountedApexDatabase {
     std::string full_path;  // Full path to the apex file.
     std::string mount_point;  // Path this apex is mounted on.
     std::string device_name;  // Name of the dm verity device.
-    // Name of the loop device backing up hashtree or empty string in case
-    // hashtree is embedded inside an APEX.
-    std::string hashtree_loop_name;
     // Whenever apex file specified in full_path was deleted.
-    bool deleted;
-    // Whether the mount is a temp mount or not.
-    bool is_temp_mount;
+    bool deleted = false;
 
-    MountedApexData() : deleted(false), is_temp_mount(false) {}
+    MountedApexData() = default;
     MountedApexData(int version, const std::string& loop_name,
                     const std::string& full_path,
                     const std::string& mount_point,
-                    const std::string& device_name,
-                    const std::string& hashtree_loop_name,
-                    bool is_temp_mount = false)
+                    const std::string& device_name)
         : version(version),
           loop_name(loop_name),
           full_path(full_path),
           mount_point(mount_point),
           device_name(device_name),
-          hashtree_loop_name(hashtree_loop_name),
-          deleted(false),
-          is_temp_mount(is_temp_mount) {}
+          deleted(false) {}
 
-    inline bool operator<(const MountedApexData& rhs) const {
-      if (version != rhs.version) {
-        return version < rhs.version;
-      }
-      int compare_val = loop_name.compare(rhs.loop_name);
-      if (compare_val < 0) {
-        return true;
-      } else if (compare_val > 0) {
-        return false;
-      }
-      compare_val = full_path.compare(rhs.full_path);
-      if (compare_val < 0) {
-        return true;
-      } else if (compare_val > 0) {
-        return false;
-      }
-      compare_val = mount_point.compare(rhs.mount_point);
-      if (compare_val < 0) {
-        return true;
-      } else if (compare_val > 0) {
-        return false;
-      }
-      compare_val = device_name.compare(rhs.device_name);
-      if (compare_val < 0) {
-        return true;
-      } else if (compare_val > 0) {
-        return false;
-      }
-      return hashtree_loop_name < rhs.hashtree_loop_name;
-    }
+    inline auto operator<=>(const MountedApexData& rhs) const = default;
   };
 
   template <typename... Args>
@@ -123,8 +85,7 @@ class MountedApexDatabase {
   }
 
   inline void RemoveMountedApex(const std::string& package,
-                                const std::string& full_path,
-                                bool match_temp_mounts = false)
+                                const std::string& full_path)
       REQUIRES(!mounted_apexes_mutex_) {
     std::lock_guard lock(mounted_apexes_mutex_);
     auto it = mounted_apexes_.find(package);
@@ -135,8 +96,7 @@ class MountedApexDatabase {
     auto& pkg_set = it->second;
 
     for (auto pkg_it = pkg_set.begin(); pkg_it != pkg_set.end(); ++pkg_it) {
-      if (pkg_it->full_path == full_path &&
-          pkg_it->is_temp_mount == match_temp_mounts) {
+      if (pkg_it->full_path == full_path) {
         pkg_set.erase(pkg_it);
         return;
       }
@@ -161,8 +121,8 @@ class MountedApexDatabase {
   }
 
   template <typename T>
-  inline void ForallMountedApexes(const std::string& package, const T& handler,
-                                  bool match_temp_mounts = false) const
+  inline void ForallMountedApexes(const std::string& package,
+                                  const T& handler) const
       REQUIRES(!mounted_apexes_mutex_) {
     std::lock_guard lock(mounted_apexes_mutex_);
     auto outer_it = mounted_apexes_.find(package);
@@ -171,25 +131,20 @@ class MountedApexDatabase {
     }
     for (auto it = outer_it->second.rbegin(), end = outer_it->second.rend();
          it != end; it++) {
-      if (it->is_temp_mount == match_temp_mounts) {
-        bool latest = (it == outer_it->second.rbegin());
-        handler(*it, latest);
-      }
+      bool latest = (it == outer_it->second.rbegin());
+      handler(*it, latest);
     }
   }
 
   template <typename T>
-  inline void ForallMountedApexes(const T& handler,
-                                  bool match_temp_mounts = false) const
+  inline void ForallMountedApexes(const T& handler) const
       REQUIRES(!mounted_apexes_mutex_) {
     std::lock_guard lock(mounted_apexes_mutex_);
     for (const auto& pkg : mounted_apexes_) {
       for (auto it = pkg.second.rbegin(), end = pkg.second.rend(); it != end;
            it++) {
-        if (it->is_temp_mount == match_temp_mounts) {
-          bool latest = (it == pkg.second.rbegin());
-          handler(pkg.first, *it, latest);
-        }
+        bool latest = (it == pkg.second.rbegin());
+        handler(pkg.first, *it, latest);
       }
     }
   }
@@ -206,8 +161,7 @@ class MountedApexDatabase {
     return ret;
   }
 
-  void PopulateFromMounts(const std::vector<std::string>& data_dirs,
-                          const std::string& apex_hash_tree_dir);
+  void PopulateFromMounts(const std::vector<std::string>& data_dirs);
 
   // Resets state of the database. Should only be used in testing.
   inline void Reset() REQUIRES(!mounted_apexes_mutex_) {
@@ -245,10 +199,6 @@ class MountedApexDatabase {
         if (mount.device_name != "") {
           CHECK(dm_devices.insert(mount.device_name).second)
               << "Duplicate dm device: " << mount.device_name;
-        }
-        if (mount.hashtree_loop_name != "") {
-          CHECK(loop_devices.insert(mount.hashtree_loop_name).second)
-              << "Duplicate loop device: " << mount.hashtree_loop_name;
         }
       }
     }
