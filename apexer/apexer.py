@@ -210,6 +210,11 @@ def ParseArgs(argv):
           'Mark the apex as non-production. Google Play Store will prevent it from being '
           'distributed to production channels.')
   )
+  parser.add_argument(
+      '--signing_command_interceptor',
+      help='Supply signing commands, such as avbtool add_hashtree_footer, as arguments to the '
+           'interceptor instead of running them directly.'
+  )
 
   return parser.parse_args(argv)
 
@@ -797,7 +802,13 @@ def SignImage(args, manifest_apex, img_file):
     cmd.append('--no_hashtree')
   if args.signing_args:
     cmd.extend(shlex.split(args.signing_args))
-  RunCommand(cmd, args.verbose)
+  if args.signing_command_interceptor is not None:
+    new_env = os.environ.copy()
+    new_env["SIGNING_COMMAND"] = cmd[0]
+    cmd[0] = args.signing_command_interceptor
+    RunCommand(cmd, args.verbose, env=new_env)
+  else:
+    RunCommand(cmd, args.verbose)
 
   # Get the minimum size of the partition required.
   # TODO(b/113320014) eliminate this step
