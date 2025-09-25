@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "5b5e0821_39754d3a",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1000003
+      },
+      "writtenOn": "2025-09-25T16:37:34Z",
+      "side": 1,
+      "message": "Looks good. Some background for what this apexer.py script even does would be welcome.",
+      "revId": "96202458a00a4a6e56ba10131718a51e1f867949",
+      "serverId": "35266860-6252-469c-a67d-185064479fc0"
+    }
+  ]
+}
